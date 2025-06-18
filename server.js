@@ -10,7 +10,7 @@ const app=express();
 const server=http.createServer(app);
 const io=new Server(server,{cors:{origin:"*",methods:["GET","POST"]}});
 const PORT=3000;
-const dbdetails={mongoUri:'mongodb+srv://aks:aks@cluster0.bptf95x.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',dbName:'Stock',collectionName:'users',};
+const dbdetails={mongoUri:'yourmongodburi',dbName:'yourdbname',collectionName:'urcollectionname',};
 app.use(session({secret:'escrowstack',resave:false,saveUninitialized:true}));
 app.use(express.json());
 app.use(bodyParser.urlencoded({extended:true}));
