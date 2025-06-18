@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+  
+  <style>
+    
+    .nav-link.dropdown-toggle::after {
+      margin-left: 0.3rem;
+    }
+    .btn-applied {
+      background-color: green !important;
+      border-color: green !important;
+      color: white !important;
+    }
+    .price-cell {
+      position: relative;
+      transition: background-color 0.3s ease;
+    }
+    .price-up {
+      color: #28a745;
+    }
+    .price-down {
+      color: #dc3545;
+    }
+    .price-change {
+      font-size: 0.8em;
+      display: block;
+    }
+    @keyframes highlight-green {
+      0% { background-color: #d4edda; }
+      100% { background-color: transparent; }
+    }
+    @keyframes highlight-red {
+      0% { background-color: #f8d7da; }
+      100% { background-color: transparent; }
+    }
+    @keyframes highlight-blue {
+      0% { background-color: #d1ecf1; }
+      100% { background-color: transparent; }
+    }
+    .price-highlight-up {
+      animation: highlight-green 2s ease-out;
+    }
+    .price-highlight-down {
+      animation: highlight-red 2s ease-out;
+    }
+    .price-highlight-update {
+      animation: 1.5s ease-out;
+    }
+    .connection-status {
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      margin-left: 10px;
+    }
+    .connected {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .disconnected {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .api-status {
+      font-size: 11px;
+      color: #6c757d;
+      margin-left: 5px;
+    }
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .subscription-price {
+      font-weight: bold;
+      color: #007bff;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">Onedha</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav">
+          <li class="nav-item">
+            <a class="nav-link active" href="#">Dashboard</a>
+          </li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Subscriptions</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#">Auction</a></li>
+              <li><a class="dropdown-item" href="#ipoSection">IPO</a></li>
+            </ul>
+          </li>
+        </ul>
+        <span class="navbar-text ms-auto">
+          Hi, <span id="username">User</span>
+          <span id="connectionStatus" class="connection-status disconnected">●</span>
+          <span id="apiStatus" class="api-status">Finnhub API</span>
+        </span>
+      </div>
+    </div>
+  </nav>
+
+  <hr>
+
+  <section id="ipoSection" class="container mt-4">
+    <h3>IPO Subscriptions 
+      <small class="text-muted">
+        <button id="refreshPrices" class="btn btn-sm btn-outline-primary ms-2">
+          <span id="refreshIcon"></span> Refresh Prices
+        </button>
+        <span id="lastUpdate" class="ms-2 text-muted"></span>
+      </small>
+    </h3>
+    <div class="table-responsive">
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Instrument</th>
+            <th>Date</th>
+            <th>Subscription Price</th>
+            <th>Min Quantity</th>
+            <th>Current Price</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>AAPL</td>
+            <td>2025-06-15</td>
+            <td class="subscription-price">$1050</td>
+            <td>10 shares</td>
+            <td class="price-cell" id="price-AAPL">
+              <div class="price-value">Loading...</div>
+              <small class="price-change" id="change-AAPL"></small>
+            </td>
+            <td><button class="btn btn-primary apply-btn" data-bs-toggle="modal" data-bs-target="#subscribeModal" data-symbol="AAPL" data-price="1050" data-min-qty="10" data-date="2025-06-15">Subscribe</button></td>
+          </tr>
+          <tr>
+            <td>TSLA</td>
+            <td>2025-06-16</td>
+            <td class="subscription-price">$725</td>
+            <td>15 shares</td>
+            <td class="price-cell" id="price-TSLA">
+              <div class="price-value">Loading...</div>
+              <small class="price-change" id="change-TSLA"></small>
+            </td>
+            <td><button class="btn btn-primary apply-btn" data-bs-toggle="modal" data-bs-target="#subscribeModal" data-symbol="TSLA" data-price="725" data-min-qty="15" data-date="2025-06-16">Subscribe</button></td>
+          </tr>
+          <tr>
+            <td>AMZN</td>
+            <td>2025-06-17</td>
+            <td class="subscription-price">$925</td>
+            <td>12 shares</td>
+            <td class="price-cell" id="price-AMZN">
+              <div class="price-value">Loading...</div>
+              <small class="price-change" id="change-AMZN"></small>
+            </td>
+            <td><button class="btn btn-primary apply-btn" data-bs-toggle="modal" data-bs-target="#subscribeModal" data-symbol="AMZN" data-price="925" data-min-qty="12" data-date="2025-06-17">Subscribe</button></td>
+          </tr>
+          <tr>
+            <td>META</td>
+            <td>2025-06-18</td>
+            <td class="subscription-price">$825</td>
+            <td>8 shares</td>
+            <td class="price-cell" id="price-META">
+              <div class="price-value">Loading...</div>
+              <small class="price-change" id="change-META"></small>
+            </td>
+            <td><button class="btn btn-primary apply-btn" data-bs-toggle="modal" data-bs-target="#subscribeModal" data-symbol="META" data-price="825" data-min-qty="8" data-date="2025-06-18">Subscribe</button></td>
+          </tr>
+          <tr>
+            <td>NVDA</td>
+            <td>2025-06-19</td>
+            <td class="subscription-price">$975</td>
+            <td>20 shares</td>
+            <td class="price-cell" id="price-NVDA">
+              <div class="price-value">Loading...</div>
+              <small class="price-change" id="change-NVDA"></small>
+            </td>
+            <td><button class="btn btn-primary apply-btn" data-bs-toggle="modal" data-bs-target="#subscribeModal" data-symbol="NVDA" data-price="975" data-min-qty="20" data-date="2025-06-19">Subscribe</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr>
+
+  <div class="tradingview-widget-container">
+    <div class="tradingview-widget-container__widget"></div>
+    <div class="tradingview-widget-copyright">
+      <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">
+        <span class="blue-text">Track all markets on TradingView</span>
+      </a>
+    </div>
+    <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+    {
+      "autosize"; true,
+      "symbol"; "NSE:NIFTY",
+      "interval"; "D",
+      "timezone"; "Asia/Kolkata",
+      "theme"; "light",
+      "style"; "1",
+      "locale"; "en",
+      "enable_publishing"; false,
+      "allow_symbol_change"; true,
+      "calendar"; false,
+      "support_host"; "https://www.tradingview.com"
+    }
+    </script>
+  </div>
+
+  <div class="modal fade" id="subscribeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">IPO Subscription</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row">
+            <div class="col-md-6">
+              <p><strong>Last Date:</strong> <span id="ipoLastDate"></span></p>
+              <p><strong>Subscription Price:</strong> <span id="subscriptionPrice" class="subscription-price"></span></p>
+              <p><strong>Min Quantity:</strong> <span id="minQuantity"></span></p>
+              <p><strong>Current Market Price:</strong> <span id="modalCurrentPrice">--</span></p>
+              <div class="alert alert-info mt-3">
+                <small><strong>Note:</strong> All subscribers will pay the same fixed price. No price selection required.</small>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <form>
+                <div class="mb-3">
+                  <label for="subscribeQty" class="form-label">Quantity to Subscribe</label>
+                  <input type="number" class="form-control" id="subscribeQty" placeholder="Enter quantity">
+                  <div class="form-text">Minimum: <span id="minQtyText"></span> shares</div>
+                  <div class="text-danger" id="qtyWarning" style="display: none;">Quantity must be at least the minimum required.</div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Subscription Price (Fixed)</label>
+                  <input type="text" class="form-control" id="fixedPrice" readonly>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Total Amount Payable</label>
+                  <input type="text" class="form-control" id="totalAmount" readonly>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="submitSubscription">Submit Subscription</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let selectedButton = null;
+    let userSubscriptions = [];
+    let currentSymbol = null;
+    let priceCache = {};
+    let currentSubscriptionPrice = 0;
+    let minQuantityRequired = 0;
+    
+    const FINNHUB_API_KEY = 'd18k6rpr01qg5218in7gd18k6rpr01qg5218in80';
+    const FINNHUB_BASE_URL = 'https://finnhub.io/api/v1';
+    
+    const supportedStocks = ['AAPL', 'TSLA', 'AMZN', 'META', 'NVDA'];
+    const socket = io();
+    const connectionStatus = document.getElementById('connectionStatus');
+    const apiStatus = document.getElementById('apiStatus');
+    
+    socket.on('connect', () => {
+      console.log('Connected to server');
+      connectionStatus.textContent = '● Connected';
+      connectionStatus.className = 'connection-status connected';
+    });
+    
+    socket.on('disconnect', () => {
+      console.log('Disconnected from server');
+      connectionStatus.textContent = '● Disconnected';
+      connectionStatus.className = 'connection-status disconnected';
+    });
+    
+    socket.on('connect_error', (error) => {
+      console.error('Connection error:', error);
+      connectionStatus.textContent = '● Error';
+      connectionStatus.className = 'connection-status disconnected';
+    });
+
+    async function getFinnhubPrice(symbol) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
+        const response = await fetch(`${FINNHUB_BASE_URL}/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`, {
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.c === 0 || data.c === null || data.c === undefined) {
+          console.warn(`No valid price data for ${symbol}`);
+          return null;
+        }
+        
+        return {
+          price: data.c,
+          change: data.d,
+          percentChange: data.dp,
+          previousClose: data.pc
+        };
+      } catch (error) {
+        console.error(`Error fetching price for ${symbol}:`, error);
+        return null;
+      }
+    }
+
+    async function updatePricesFromFinnhub() {
+      const refreshIcon = document.getElementById('refreshIcon');
+      refreshIcon.style.transform = 'rotate(360deg)';
+      refreshIcon.style.transition = 'transform 0.5s';
+      
+      apiStatus.textContent = 'Updating...';
+      apiStatus.style.color = '#ffc107';
+      
+      let successCount = 0;
+      
+      for (const stock of supportedStocks) {
+        try {
+          const priceElement = document.querySelector(`#price-${stock} .price-value`);
+          if (priceElement && priceElement.textContent === 'Loading...') {
+            priceElement.innerHTML = '<span class="loading-spinner"></span> Loading...';
+          }
+          
+          const priceData = await getFinnhubPrice(stock);
+          
+          if (priceData && priceData.price) {
+            updatePriceDisplay(stock, priceData);
+            successCount++;
+          } else {
+            const priceElement = document.querySelector(`#price-${stock} .price-value`);
+            if (priceElement) {
+              priceElement.textContent = 'N/A';
+              priceElement.title = 'Click refresh to retry';
+            }
+            console.warn(`Failed to get price for ${stock}`);
+          }
+        } catch (error) {
+          console.error(`Failed to update ${stock}:`, error);
+          const priceElement = document.querySelector(`#price-${stock} .price-value`);
+          if (priceElement) {
+            priceElement.textContent = 'Error';
+            priceElement.title = 'Failed to load price';
+          }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      document.getElementById('lastUpdate').textContent = 
+        `Last updated: ${new Date().toLocaleTimeString()}`;
+      
+      if (successCount > 0) {
+        apiStatus.textContent = `Finnhub API (${successCount}/${supportedStocks.length})`;
+        apiStatus.style.color = successCount === supportedStocks.length ? '#28a745' : '#ffc107';
+      } else {
+        apiStatus.textContent = 'Finnhub API (Error)';
+        apiStatus.style.color = '#dc3545';
+      }
+      
+      setTimeout(() => {
+        refreshIcon.style.transform = 'rotate(0deg)';
+      }, 500);
+    }
+
+    function updatePriceDisplay(symbol, priceData) {
+      const priceElement = document.querySelector(`#price-${symbol} .price-value`);
+      const changeElement = document.getElementById(`change-${symbol}`);
+      const priceCell = document.getElementById(`price-${symbol}`);
+      
+      if (!priceElement) return;
+      
+      const newPrice = priceData.price.toFixed(2);
+      const change = priceData.change;
+      const percentChange = priceData.percentChange;
+      
+      const previousPrice = priceCache[symbol];
+      
+      priceElement.textContent = `$${newPrice}`;
+      
+      if (changeElement) {
+        const changeText = `${change >= 0 ? '+' : ''}${change.toFixed(2)} (${percentChange >= 0 ? '+' : ''}${percentChange.toFixed(2)}%)`;
+        changeElement.textContent = changeText;
+        changeElement.className = `price-change ${change >= 0 ? 'price-up' : 'price-down'}`;
+      }
+      
+      if (priceCell) {
+        priceCell.classList.remove('price-highlight-up', 'price-highlight-down', 'price-highlight-update');
+        
+        if (previousPrice && parseFloat(previousPrice) !== parseFloat(newPrice)) {
+          if (parseFloat(newPrice) > parseFloat(previousPrice)) {
+            priceCell.classList.add('price-highlight-up');
+          } else {
+            priceCell.classList.add('price-highlight-down');
+          }
+        } else if (!previousPrice) {
+          priceCell.classList.add('price-highlight-update');
+        }
+        
+        setTimeout(() => {
+          priceCell.classList.remove('price-highlight-up', 'price-highlight-down', 'price-highlight-update');
+        }, 2000);
+      }
+      
+      priceCache[symbol] = newPrice;
+    }
+
+    async function setUser() {
+      try {
+        const res = await fetch('/api/user');
+        const data = await res.json();
+        document.getElementById('username').textContent = data.username || 'User';
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    }
+
+    async function loadUserSubscriptions() {
+      try {
+        const res = await fetch('/api/subscriptions');
+        const data = await res.json();
+        userSubscriptions = data.subscriptions || [];
+        
+        userSubscriptions.forEach(subscription => {
+          const button = document.querySelector(`[data-symbol="${subscription.instrument}"]`);
+          if (button) {
+            markAsSubscribed(button);
+          }
+        });
+      } catch (error) {
+        console.error('Error loading subscriptions:', error);
+      }
+    }
+
+    function markAsSubscribed(button) {
+      button.classList.remove('btn-primary');
+      button.classList.add('btn-applied');
+      button.textContent = 'Subscribed';
+      button.disabled = true;
+      button.removeAttribute('data-bs-toggle');
+      button.removeAttribute('data-bs-target');
+    }
+
+    function isAlreadySubscribed(instrument) {
+      return userSubscriptions.some(sub => sub.instrument === instrument);
+    }
+
+    function calculateTotal() {
+      const qty = Number(document.getElementById('subscribeQty').value);
+      const total = qty * currentSubscriptionPrice;
+      document.getElementById('totalAmount').value = isNaN(total) || total === 0 ? '' : `$${total}`;
+    }
+
+    function validateQuantity() {
+      const qty = Number(document.getElementById('subscribeQty').value);
+      const warning = document.getElementById('qtyWarning');
+      if (qty < minQuantityRequired) {
+        warning.style.display = 'block';
+        return false;
+      } else {
+        warning.style.display = 'none';
+        return true;
+      }
+    }
+
+    document.querySelectorAll('.apply-btn').forEach(button => {
+      button.addEventListener('click', (e) => {
+        const instrument = button.getAttribute('data-symbol');
+        
+        if (isAlreadySubscribed(instrument)) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+
+        selectedButton = button;
+        currentSymbol = instrument;
+        currentSubscriptionPrice = Number(button.getAttribute('data-price'));
+        minQuantityRequired = Number(button.getAttribute('data-min-qty'));
+        
+        document.getElementById('ipoLastDate').textContent = button.getAttribute('data-date');
+        document.getElementById('subscriptionPrice').textContent = `$${currentSubscriptionPrice}`;
+        document.getElementById('minQuantity').textContent = `${minQuantityRequired} shares`;
+        document.getElementById('minQtyText').textContent = minQuantityRequired;
+        document.getElementById('fixedPrice').value = `$${currentSubscriptionPrice}`;
+        
+        const currentPriceElement = document.querySelector(`#price-${instrument} .price-value`);
+        document.getElementById('modalCurrentPrice').textContent = 
+          currentPriceElement ? currentPriceElement.textContent : '--';
+        
+        document.getElementById('subscribeQty').value = '';
+        document.getElementById('totalAmount').value = '';
+        document.getElementById('qtyWarning').style.display = 'none';
+      });
+    });
+
+    document.getElementById('refreshPrices').addEventListener('click', updatePricesFromFinnhub);
+
+    document.getElementById('subscribeQty').addEventListener('input', () => {
+      calculateTotal();
+      validateQuantity();
+    });
+
+    document.getElementById('submitSubscription').addEventListener('click', async () => {
+      const qty = Number(document.getElementById('subscribeQty').value);
+      const instrument = selectedButton.getAttribute('data-symbol');
+
+      if (!qty || qty <= 0) {
+        alert('Please enter a valid quantity');
+        return;
+      }
+
+      if (!validateQuantity()) {
+        alert(`Minimum quantity required is ${minQuantityRequired} shares`);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/subscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            instrument: instrument,
+            quantity: qty,
+            price: currentSubscriptionPrice
+          })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          alert('IPO subscription submitted successfully!');
+          markAsSubscribed(selectedButton);
+          userSubscriptions.push({
+            instrument: instrument,
+            quantity: qty,
+            price: currentSubscriptionPrice,
+            subscribedAt: new Date()
+          });
+          
+          const modal = bootstrap.Modal.getInstance(document.getElementById('subscribeModal'));
+          modal.hide();
+        } else {
+          alert(result.error || 'Failed to submit subscription');
+        }
+      } catch (error) {
+        console.error('Error submitting subscription:', error);
+        alert('Failed to submit subscription. Please try again.');
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (FINNHUB_API_KEY === 'YOUR_FINNHUB_API_KEY') {
+        console.warn('Finnhub API key not set. Please update FINNHUB_API_KEY variable.');
+        apiStatus.textContent = 'API Key Required';
+        apiStatus.style.color = '#dc3545';
+      } else {
+        await setUser();
+        await loadUserSubscriptions();
+        await updatePricesFromFinnhub();
+        setInterval(updatePricesFromFinnhub, 30000);
+      }
+    });
+    async function logout() {
+      try {
+        const response = await fetch('/logout', {
+          method: 'POST'
+        });
+        
+        if (response.ok) {
+          window.location.href = '/login.html';
+        } else {
+          alert('Logout failed');
+        }
+      } catch (error) {
+        console.error('Logout error:', error);
+        alert('Logout failed');
+      }
+    }
+
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', logout);
+    }
+  </script>
+</body>
+</html>
