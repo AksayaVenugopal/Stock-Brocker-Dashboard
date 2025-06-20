@@ -38,10 +38,9 @@ COLLECTION_NAME=users
 FINNHUB_API_KEY=your_finnhub_api_key
 # Application
 PORT=3000
-NODE_ENV=production
 ```
 
-**Important**: Replace the placeholder values with your actual credentials. Never commit real credentials to version control.
+
 
 ### 3. Docker Setup
 Create a `docker-compose.yml` file:
@@ -58,7 +57,6 @@ services:
       - .env
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
